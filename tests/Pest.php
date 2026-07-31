@@ -48,3 +48,16 @@ function something()
 {
     // ..
 }
+
+/**
+ * Drop any auth guard that has already resolved a user.
+ *
+ * Feature tests reuse one application container across every request they make,
+ * so a guard that authenticated during an earlier request keeps returning that
+ * user even after its token is revoked or expires. Real HTTP requests each boot
+ * a fresh container; calling this between requests restores that behaviour.
+ */
+function startNewRequestLifecycle(): void
+{
+    app('auth')->forgetGuards();
+}
