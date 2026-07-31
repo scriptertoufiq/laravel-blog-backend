@@ -17,6 +17,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         ->middleware('throttle:login')
         ->name('login');
 
+    Route::get('posts', [PostController::class, 'index'])->name('posts.index');
+    Route::get('posts/{slug}', [PostController::class, 'show'])->name('posts.show');
+
     Route::prefix('email')->name('verification.')->group(function (): void {
         Route::get('verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
             ->middleware(['signed', 'throttle:verification-link'])

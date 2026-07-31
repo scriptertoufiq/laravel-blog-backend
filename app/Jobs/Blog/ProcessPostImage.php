@@ -58,8 +58,11 @@ class ProcessPostImage implements ShouldQueue
 
     /**
      * Execute the job.
+     *
+     * The generated thumbnail changes what the read endpoints should return, so
+     * the post's cache entries are dropped once the new path is written.
      */
-    public function handle(): void
+    public function handle(PostService $posts): void
     {
         if (! function_exists('imagecreatefromstring')) {
             Log::warning('Skipping post thumbnail generation because the GD extension is unavailable.', [
@@ -105,6 +108,8 @@ class ProcessPostImage implements ShouldQueue
             ->whereKey($post->getKey())
             ->toBase()
             ->update(['image_thumbnail_path' => $thumbnailPath]);
+
+        $posts->forget($post);
     }
 
     /**

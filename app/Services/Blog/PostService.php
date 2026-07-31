@@ -2,11 +2,14 @@
 
 namespace App\Services\Blog;
 
+use App\Http\Resources\Api\V1\PostResource;
 use App\Jobs\Blog\ProcessPostImage;
 use App\Models\Post;
 use App\Models\Tag;
 use App\Models\User;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -21,6 +24,71 @@ class PostService
      * The directory that post images are written to.
      */
     public const IMAGE_DIRECTORY = 'posts/images';
+
+    /**
+     * How long a cached listing or post is served before it is rebuilt.
+     */
+    private const CACHE_TTL_SECONDS = 300;
+
+    /**
+     * Holds the generation number that every listing key is stamped with.
+     *
+     * The configured cache store is `database`, which cannot do `Cache::tags()`,
+     * so listings are invalidated by bumping this number instead. Every old key
+     * is orphaned in one write and ages out on its own TTL.
+     */
+    private const LIST_VERSION_KEY = 'posts:list:version';
+
+    /**
+     * Read a page of posts, serving it from cache whenever one is warm.
+     *
+     * Fully rendered payloads are cached rather than Eloquent objects, because
+     * `cache.serializable_classes` is `false` — this application refuses to
+     * unserialize PHP objects out of the cache, and arrays sidestep that
+     * entirely while staying smaller on the wire.
+     *
+     * @return array<string, mixed>
+     */
+    public function paginate(int $page, int $perPage): array
+    {
+        return Cache::remember(
+            $this->listKey($page, $perPage),
+            self::CACHE_TTL_SECONDS,
+            function () use ($page, $perPage): array {
+                $posts = Post::query()
+                    ->with(['tags', 'author'])
+                    ->latest('created_at')
+                    ->latest('id')
+                    ->paginate(perPage: $perPage, page: $page)
+                    ->withPath(route('api.v1.posts.index'));
+
+                return PostResource::collection($posts)->response(request())->getData(true);
+            },
+        );
+    }
+
+    /**
+     * Read a single post by slug, serving it from cache whenever one is warm.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws ModelNotFoundException<Post>
+     */
+    public function findBySlug(string $slug): array
+    {
+        return Cache::remember(
+            $this->showKey($slug),
+            self::CACHE_TTL_SECONDS,
+            function () use ($slug): array {
+                $post = Post::query()
+                    ->with(['tags', 'author'])
+                    ->where('slug', $slug)
+                    ->firstOrFail();
+
+                return PostResource::make($post)->response(request())->getData(true);
+            },
+        );
+    }
 
     /**
      * Create a post for the given author, attach its tags, and queue the image work.
@@ -44,11 +112,59 @@ class PostService
             return $post;
         });
 
+        $this->forget($post);
+
         if ($imagePath !== null) {
             ProcessPostImage::dispatch($post)->afterCommit();
         }
 
         return $post->load('tags');
+    }
+
+    /**
+     * Drop every cache entry that could still be serving a stale view of a post.
+     */
+    public function forget(Post $post): void
+    {
+        Cache::forget($this->showKey($post->slug));
+
+        $this->bumpListVersion();
+    }
+
+    /**
+     * Build the cache key for a page of the listing.
+     */
+    private function listKey(int $page, int $perPage): string
+    {
+        return sprintf('posts:list:v%d:page%d:per%d', $this->listVersion(), $page, $perPage);
+    }
+
+    /**
+     * Build the cache key for a single post.
+     */
+    private function showKey(string $slug): string
+    {
+        return 'posts:show:'.$slug;
+    }
+
+    /**
+     * Get the generation number that listing keys are currently stamped with.
+     */
+    private function listVersion(): int
+    {
+        return (int) Cache::rememberForever(self::LIST_VERSION_KEY, fn (): int => 1);
+    }
+
+    /**
+     * Orphan every cached listing by moving to the next generation.
+     */
+    private function bumpListVersion(): void
+    {
+        $this->listVersion();
+
+        if (Cache::increment(self::LIST_VERSION_KEY) === false) {
+            Cache::forever(self::LIST_VERSION_KEY, $this->listVersion() + 1);
+        }
     }
 
     /**

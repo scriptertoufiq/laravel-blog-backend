@@ -28,7 +28,7 @@ class PostResource extends JsonResource
             'image_url' => $this->urlFor($this->image_path),
             'image_thumbnail_url' => $this->urlFor($this->image_thumbnail_path),
             'tags' => TagResource::collection($this->whenLoaded('tags')),
-            'author' => UserResource::make($this->whenLoaded('author')),
+            'author' => AuthorResource::make($this->whenLoaded('author')),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

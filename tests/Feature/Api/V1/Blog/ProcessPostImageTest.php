@@ -57,7 +57,7 @@ function dimensionsOf(string $path): array
 it('writes a thumbnail scaled down to the maximum width', function (): void {
     $post = postWithStoredImage('cover.jpg', 1800, 1200);
 
-    (new ProcessPostImage($post))->handle();
+    dispatch_sync(new ProcessPostImage($post));
 
     $post->refresh();
 
@@ -71,7 +71,7 @@ it('writes a thumbnail scaled down to the maximum width', function (): void {
 it('preserves the aspect ratio of a portrait image', function (): void {
     $post = postWithStoredImage('tall.jpg', 900, 1800);
 
-    (new ProcessPostImage($post))->handle();
+    dispatch_sync(new ProcessPostImage($post));
 
     expect(dimensionsOf($post->refresh()->image_thumbnail_path))->toBe([600, 1200]);
 });
@@ -79,7 +79,7 @@ it('preserves the aspect ratio of a portrait image', function (): void {
 it('never enlarges an image that is already small', function (): void {
     $post = postWithStoredImage('small.jpg', 320, 240);
 
-    (new ProcessPostImage($post))->handle();
+    dispatch_sync(new ProcessPostImage($post));
 
     expect(dimensionsOf($post->refresh()->image_thumbnail_path))->toBe([320, 240]);
 });
@@ -88,7 +88,7 @@ it('keeps the original file untouched', function (): void {
     $post = postWithStoredImage('cover.jpg', 1800, 1200);
     $originalBytes = Storage::disk(PostService::IMAGE_DISK)->get($post->image_path);
 
-    (new ProcessPostImage($post))->handle();
+    dispatch_sync(new ProcessPostImage($post));
 
     expect(Storage::disk(PostService::IMAGE_DISK)->get($post->image_path))->toBe($originalBytes)
         ->and(dimensionsOf($post->image_path))->toBe([1800, 1200]);
@@ -97,7 +97,7 @@ it('keeps the original file untouched', function (): void {
 it('writes a png thumbnail for a png original', function (): void {
     $post = postWithStoredImage('cover.png', 1000, 1000);
 
-    (new ProcessPostImage($post))->handle();
+    dispatch_sync(new ProcessPostImage($post));
 
     $bytes = (string) Storage::disk(PostService::IMAGE_DISK)->get($post->refresh()->image_thumbnail_path);
 
@@ -110,7 +110,7 @@ it('does not present thumbnail generation as an edit to the post', function (): 
 
     $this->travel(10)->minutes();
 
-    (new ProcessPostImage($post))->handle();
+    dispatch_sync(new ProcessPostImage($post));
 
     expect($post->refresh()->updated_at->timestamp)->toBe($updatedAt->timestamp);
 });
@@ -118,7 +118,7 @@ it('does not present thumbnail generation as an edit to the post', function (): 
 it('does nothing for a post with no image', function (): void {
     $post = Post::factory()->create(['image_path' => null]);
 
-    (new ProcessPostImage($post))->handle();
+    dispatch_sync(new ProcessPostImage($post));
 
     expect($post->refresh()->image_thumbnail_path)->toBeNull();
 });
@@ -128,7 +128,7 @@ it('leaves the post alone when the source file has vanished', function (): void 
 
     Storage::disk(PostService::IMAGE_DISK)->delete($post->image_path);
 
-    (new ProcessPostImage($post))->handle();
+    dispatch_sync(new ProcessPostImage($post));
 
     expect($post->refresh()->image_thumbnail_path)->toBeNull();
 });
@@ -138,7 +138,7 @@ it('leaves the post alone when the file cannot be decoded', function (): void {
 
     Storage::disk(PostService::IMAGE_DISK)->put($post->image_path, 'this is not an image');
 
-    (new ProcessPostImage($post))->handle();
+    dispatch_sync(new ProcessPostImage($post));
 
     expect($post->refresh()->image_thumbnail_path)->toBeNull();
 });
@@ -146,10 +146,10 @@ it('leaves the post alone when the file cannot be decoded', function (): void {
 it('can run twice without breaking', function (): void {
     $post = postWithStoredImage('cover.jpg', 1200, 900);
 
-    (new ProcessPostImage($post))->handle();
+    dispatch_sync(new ProcessPostImage($post));
     $firstPath = $post->refresh()->image_thumbnail_path;
 
-    (new ProcessPostImage($post))->handle();
+    dispatch_sync(new ProcessPostImage($post));
 
     expect($post->refresh()->image_thumbnail_path)->toBe($firstPath)
         ->and(dimensionsOf($firstPath))->toBe([600, 450]);
