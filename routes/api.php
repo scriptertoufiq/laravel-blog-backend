@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Auth\EmailVerificationController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
+use App\Http\Controllers\Api\V1\PostController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
@@ -29,8 +30,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('logout', LogoutController::class)->name('logout');
 
-        Route::get('user', AuthenticatedUserController::class)
-            ->middleware('verified')
-            ->name('user');
+        Route::middleware('verified')->group(function (): void {
+            Route::get('user', AuthenticatedUserController::class)->name('user');
+
+            Route::apiResource('posts', PostController::class)->only('store');
+        });
     });
 });
