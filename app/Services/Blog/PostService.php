@@ -58,6 +58,7 @@ class PostService
             function () use ($page, $perPage): array {
                 $posts = Post::query()
                     ->with(['tags', 'author'])
+                    ->withCount('comments')
                     ->latest('created_at')
                     ->latest('id')
                     ->paginate(perPage: $perPage, page: $page)
@@ -83,6 +84,7 @@ class PostService
             function () use ($slug): array {
                 $post = Post::query()
                     ->with(['tags', 'author'])
+                    ->withCount('comments')
                     ->where('slug', $slug)
                     ->firstOrFail();
 
@@ -168,6 +170,7 @@ class PostService
     public function refresh(Post $post): Post
     {
         $post = $post->fresh(['tags', 'author']) ?? $post;
+        $post->loadCount('comments');
 
         Cache::put(
             $this->showKey($post->slug),
@@ -185,8 +188,24 @@ class PostService
      */
     public function forget(Post $post): void
     {
-        Cache::forget($this->showKey($post->slug));
+        $this->forgetShow($post->slug);
 
+        $this->forgetAllListings();
+    }
+
+    /**
+     * Drop the cached payload for one post.
+     */
+    public function forgetShow(string $slug): void
+    {
+        Cache::forget($this->showKey($slug));
+    }
+
+    /**
+     * Orphan every cached listing page in a single write.
+     */
+    public function forgetAllListings(): void
+    {
         $this->bumpListVersion();
     }
 
