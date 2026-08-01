@@ -29,16 +29,17 @@ it('rejects an unauthenticated request', function (): void {
     expect(Post::query()->count())->toBe(0);
 });
 
-it('rejects an author whose email is not verified', function (): void {
+it('lets an author whose email is not verified create a post', function (): void {
     startNewRequestLifecycle();
-    Sanctum::actingAs(User::factory()->unverified()->create());
+    $unverified = User::factory()->unverified()->create();
+    Sanctum::actingAs($unverified);
 
     $this->postJson(route('api.v1.posts.store'), [
         'title' => 'Unverified Post',
         'description' => 'A description that is comfortably long enough.',
-    ])->assertForbidden();
+    ])->assertCreated()->assertJsonPath('data.title', 'Unverified Post');
 
-    expect(Post::query()->count())->toBe(0);
+    expect(Post::query()->sole()->user_id)->toBe($unverified->id);
 });
 
 it('creates a post with a title and description', function (): void {

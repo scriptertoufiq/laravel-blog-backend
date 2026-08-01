@@ -221,7 +221,7 @@ it('rejects an unauthenticated update', function (): void {
     expect($this->post->refresh()->title)->toBe('Original Title');
 });
 
-it('rejects an author whose email is not verified', function (): void {
+it('lets an author whose email is not verified edit their own post', function (): void {
     startNewRequestLifecycle();
 
     $unverified = User::factory()->unverified()->create();
@@ -230,7 +230,8 @@ it('rejects an author whose email is not verified', function (): void {
     Sanctum::actingAs($unverified);
 
     $this->putJson(route('api.v1.posts.update', $theirPost), ['title' => 'Unverified Edit'])
-        ->assertForbidden();
+        ->assertOk()
+        ->assertJsonPath('data.title', 'Unverified Edit');
 });
 
 it('returns not found for an unknown slug', function (): void {

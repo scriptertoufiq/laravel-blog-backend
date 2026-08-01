@@ -2,7 +2,6 @@
 
 namespace App\Services\Auth;
 
-use App\Exceptions\Auth\EmailNotVerifiedException;
 use App\Jobs\Auth\RecordUserLogin;
 use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
@@ -26,7 +25,6 @@ class AuthenticationService
      * @return array{user: User, token: string}
      *
      * @throws ValidationException
-     * @throws EmailNotVerifiedException
      */
     public function login(array $credentials, string $deviceName, string $ipAddress): array
     {
@@ -45,10 +43,6 @@ class AuthenticationService
         }
 
         RateLimiter::clear($throttleKey);
-
-        if (! $user->hasVerifiedEmail()) {
-            throw new EmailNotVerifiedException;
-        }
 
         $token = $user->createToken($deviceName)->plainTextToken;
 

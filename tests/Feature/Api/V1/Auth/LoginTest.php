@@ -124,7 +124,7 @@ it('gives the same error for an unknown email as for a wrong password', function
         ->and($unknownEmail->json('errors.email'))->toBe($wrongPassword->json('errors.email'));
 });
 
-it('refuses to log in an unverified account', function (): void {
+it('logs in an account whose email is not verified', function (): void {
     $user = User::factory()->unverified()->create([
         'email' => 'toufiq@example.com',
         'password' => 'password-secret',
@@ -133,10 +133,11 @@ it('refuses to log in an unverified account', function (): void {
     $this->postJson(route('api.v1.login'), [
         'email' => 'toufiq@example.com',
         'password' => 'password-secret',
-    ])->assertForbidden()->assertJsonPath('code', 'email_not_verified');
+    ])->assertCreated()
+        ->assertJsonPath('data.email_verified', false)
+        ->assertJsonPath('token_type', 'Bearer');
 
-    expect($user->tokens()->count())->toBe(0);
-    Queue::assertNothingPushed();
+    expect($user->tokens()->count())->toBe(1);
 });
 
 it('validates the required login fields', function (array $payload, array $errors): void {

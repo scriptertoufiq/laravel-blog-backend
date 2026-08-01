@@ -65,13 +65,15 @@ it('rejects a logout with a bogus token', function (): void {
         ->assertUnauthorized();
 });
 
-it('lets an unverified token holder log out but not read their profile', function (): void {
+it('lets an unverified token holder read their profile and log out', function (): void {
     $user = User::factory()->unverified()->create();
     $token = tokenFor($user);
 
     $this->withHeader('Authorization', 'Bearer '.$token)
         ->getJson(route('api.v1.user'))
-        ->assertForbidden();
+        ->assertOk()
+        ->assertJsonPath('data.id', $user->id)
+        ->assertJsonPath('data.email_verified', false);
 
     startNewRequestLifecycle();
 
