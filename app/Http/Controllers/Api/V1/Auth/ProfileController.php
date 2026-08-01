@@ -25,7 +25,12 @@ class ProfileController extends Controller
         $emailChanged = $request->has('email')
             && $request->validated('email') !== $user->email;
 
-        $user = $this->profile->update($user, $request->profileData());
+        $user = $this->profile->update(
+            $user,
+            $request->profileData(),
+            $request->avatarFile(),
+            $request->wantsAvatarRemoved(),
+        );
 
         return UserResource::make($user)
             ->additional([

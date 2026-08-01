@@ -26,6 +26,15 @@ class RefreshAuthorPostsCache implements ShouldQueue
      */
     private const CHUNK = 500;
 
+    /**
+     * Discard the job when the model it carries has been deleted.
+     *
+     * Queued jobs restore their models by id, which throws before `handle()`
+     * ever runs — so a user or post deleted while a job was still queued would
+     * otherwise land in `failed_jobs` for no useful reason.
+     */
+    public bool $deleteWhenMissingModels = true;
+
     public int $tries = 3;
 
     /** @var array<int, int> */

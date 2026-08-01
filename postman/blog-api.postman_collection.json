@@ -1,0 +1,940 @@
+{
+  "info": {
+    "_postman_id": "b1a9d4e2-7c53-4f18-9a6d-blog0api0v1",
+    "name": "Blog API v1",
+    "description": "Laravel blog API.\n\n**Quick start**\n1. Import this collection and `blog-api.postman_environment.json`.\n2. Select the \"Blog API - local\" environment.\n3. Hit **Run Collection** \u2014 every request passes top to bottom.\n\nLogin captures `{{token}}` automatically; `{{post_slug}}` and `{{comment_id}}` are captured too.\n\n**Notes**\n- Auth is a Sanctum bearer token, set at collection level. Public endpoints override to \"No Auth\".\n- Any request carrying a **file** must be `POST` with `_method=PUT` \u2014 PHP only populates `$_FILES` on POST.\n- Background jobs power thumbnails, emails and cache refreshes. Run a worker:\n  `php artisan queue:work --queue=images,mail,cache,default`\n- Rate limits: register 5/min, login 20/min per IP, password 5/min per user, verification 6/min, others 60/min. `429` means you hit one.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Unique email per run so Register never collides.",
+          "const setVar = (k, v) => { pm.collectionVariables.set(k, v); try { pm.environment.set(k, v); } catch (e) {} };",
+          "if (!pm.variables.get('run_id')) { setVar('run_id', Date.now().toString().slice(-6)); }"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "post_slug",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "comment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "email",
+      "value": "demo@example.com",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "password-secret",
+      "type": "string"
+    },
+    {
+      "key": "run_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "register"
+              ]
+            },
+            "description": "Public. Creates a user and queues a verification email.\n\n**201** returns the user \u2014 no token, call Login next.\n\n`name` 2-255 \u00b7 `email` unique, lowercased \u00b7 `password` min 8 (12 + mixed case/numbers/symbols in production), `confirmed`.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Tester\",\n  \"email\": \"postman+{{run_id}}@example.com\",\n  \"password\": \"password-secret\",\n  \"password_confirmation\": \"password-secret\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const setVar = (k, v) => { pm.collectionVariables.set(k, v); try { pm.environment.set(k, v); } catch (e) {} };",
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.email) { setVar('email', b.data.email); setVar('password', 'password-secret'); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login  \u2192 captures {{token}}",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "login"
+              ]
+            },
+            "description": "Public. Exchanges credentials for a bearer token.\n\n**201** `{ message, token, token_type, data }` \u2014 the test script stores `token`.\n\n`device_name` is optional; it labels the token. Unverified accounts CAN log in. Wrong password and unknown email return the same `422` so accounts can't be enumerated. 5 failed/min per email+IP \u2192 `429`.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"device_name\": \"postman\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const setVar = (k, v) => { pm.collectionVariables.set(k, v); try { pm.environment.set(k, v); } catch (e) {} };",
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('returns a token', () => pm.expect(b.token).to.be.a('string').and.not.empty);",
+                  "setVar('token', b.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Current user",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/user",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user"
+              ]
+            },
+            "description": "Requires a token.\n\n**200** `{ data: { id, name, email, email_verified, email_verified_at, avatar_url, avatar_thumbnail_url, created_at } }`"
+          }
+        },
+        {
+          "name": "Resend verification email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/email/verification-notification",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "email",
+                "verification-notification"
+              ]
+            },
+            "description": "Public. Queues a fresh verification link.\n\n**202** \u2014 identical response whether the address is unknown, known, or already verified, so it can't reveal which emails have accounts.\n\nLimits: 6/min per IP, 3/min per email.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Verify email (signed link \u2014 read the description)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/email/verify/:id/:hash?expires=&signature=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "email",
+                "verify",
+                ":id",
+                ":hash"
+              ],
+              "query": [
+                {
+                  "key": "expires",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "signature",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                },
+                {
+                  "key": "hash",
+                  "value": ""
+                }
+              ]
+            },
+            "description": "**This URL cannot be built by hand** \u2014 it is cryptographically signed; any edit invalidates it (`403`).\n\nCopy the whole link from the email. With `MAIL_MAILER=log` it lands in the log:\n\n```bash\ngrep -o 'http[^\"]*email/verify[^\"]*' storage/logs/laravel.log | tail -1\n```\n\n**200** on success and again if already verified (different `message`). Expires after 60 minutes.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Profile",
+      "item": [
+        {
+          "name": "Update profile (name / email)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/user/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "profile"
+              ]
+            },
+            "description": "Requires a token. `PATCH` works identically. Both fields optional \u2014 send only what changed; sending neither is a valid no-op.\n\n**Changing the email resets verification** and queues a new link; `email_verified` returns `false`. Re-sending your existing address changes nothing.\n\n**Changing the name** queues a job that clears your name from every cached post byline:\n```bash\nphp artisan queue:work --queue=cache\n```\n\nAvatars live on this same endpoint \u2014 see the two requests below.\n\n**200** `{ message, data }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"email\": \"{{email}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update profile (multipart, with avatar)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/user/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "profile"
+              ]
+            },
+            "description": "Requires a token. **Method is POST with `_method=PUT`** \u2014 a real multipart PUT arrives with no file in PHP.\n\n**Pick a file for `avatar` before sending** (Postman can't store file paths in an export).\n\nRules: jpg/jpeg/png/webp, real MIME checked (SVG rejected), min 100\u00d7100, max 2 MB. The filename is never trusted.\n\n`avatar_thumbnail_url` returns `null` \u2014 a 200px thumbnail is generated in the background, which also refreshes your avatar on every cached byline:\n```bash\nphp artisan queue:work --queue=images,cache\n```\n\nOther profile fields can ride along in the same request.\n\n**200** `{ message, data }`.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "_method",
+                  "value": "PUT",
+                  "type": "text",
+                  "description": "Required \u2014 PHP only parses multipart on POST"
+                },
+                {
+                  "key": "name",
+                  "value": "Updated Name",
+                  "type": "text"
+                },
+                {
+                  "key": "avatar",
+                  "type": "file",
+                  "src": [],
+                  "description": "JPG/PNG/WebP \u00b7 min 100\u00d7100 \u00b7 max 2 MB"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Remove avatar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/user/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "profile"
+              ]
+            },
+            "description": "Requires a token. Clears the picture and deletes both files from disk.\n\nCombining `remove_avatar` with an `avatar` file is rejected (`422`) \u2014 they contradict each other. A no-op when no avatar is set.\n\n**200** with both avatar URLs `null`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"remove_avatar\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Change password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/user/password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "password"
+              ]
+            },
+            "description": "Requires a token **and** your current password \u2014 a stolen token alone can't lock you out.\n\nOn success **all your other tokens are revoked**; the token making this request survives, so Postman stays authenticated. The new password must differ from the current one. Limit: 5/min per user.\n\n\u26a0\ufe0f This really changes the password. The test script updates `{{password}}` so later Logins keep working.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"{{password}}\",\n  \"password\": \"a-brand-new-secret\",\n  \"password_confirmation\": \"a-brand-new-secret\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const setVar = (k, v) => { pm.collectionVariables.set(k, v); try { pm.environment.set(k, v); } catch (e) {} };",
+                  "if (pm.response.code === 200) {",
+                  "  const sent = JSON.parse(pm.request.body.raw.replace(/{{password}}/g, pm.variables.get('password')));",
+                  "  setVar('password', sent.password);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Posts",
+      "item": [
+        {
+          "name": "List posts  \u2192 captures {{post_slug}}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/posts?page=1&per_page=15",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "posts"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "1-1000"
+                },
+                {
+                  "key": "per_page",
+                  "value": "15",
+                  "description": "1-50, default 15"
+                }
+              ]
+            },
+            "description": "Public, newest first, served from cache.\n\n**200** `{ data, links, meta }`. Each post carries `comments_count`, `tags[]`, `author { id, name, avatar_url }` and both image URLs.\n\n`page`/`per_page` are capped because each combination is its own cache key; out-of-range \u2192 `422`.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const setVar = (k, v) => { pm.collectionVariables.set(k, v); try { pm.environment.set(k, v); } catch (e) {} };",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.length) { setVar('post_slug', b.data[0].slug); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Show post",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/posts/{{post_slug}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "posts",
+                "{{post_slug}}"
+              ]
+            },
+            "description": "Public. Looked up by **slug**, not id. Served from cache.\n\n**200** `{ data }` \u00b7 **404** unknown slug.",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Create post (JSON, no image)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/posts",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "posts"
+              ]
+            },
+            "description": "Requires a token.\n\n`title` 3-255 \u00b7 `description` min 10 \u00b7 `tags` optional, max 10, each 2-50 chars, matched by slug so `Laravel` and `laravel` are one tag.\n\nThe slug is generated from the title and de-duplicated (`-2`, `-3`).\n\n**201** `{ message, data }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"A Post From Postman\",\n  \"description\": \"A description that is comfortably longer than the ten character minimum.\",\n  \"tags\": [\"laravel\", \"postman\"]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const setVar = (k, v) => { pm.collectionVariables.set(k, v); try { pm.environment.set(k, v); } catch (e) {} };",
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.slug) { setVar('post_slug', b.data.slug); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create post (multipart, with image)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/posts",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "posts"
+              ]
+            },
+            "description": "Requires a token. **Select a file for `image` before sending.**\n\nRules: jpg/jpeg/png/webp, real MIME checked (SVG rejected), \u2265200\u00d7200, \u22645 MB. Filenames are never trusted.\n\nThe 600px thumbnail is generated in the background, so `image_thumbnail_url` is `null` in the response:\n```bash\nphp artisan queue:work --queue=images\n```\n\nNote the repeated `tags[]` keys \u2014 that is how arrays travel in multipart.\n\n**201** `{ message, data }`.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "title",
+                  "value": "A Post With A Cover Image",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "A description that is comfortably longer than the ten character minimum.",
+                  "type": "text"
+                },
+                {
+                  "key": "tags[]",
+                  "value": "laravel",
+                  "type": "text"
+                },
+                {
+                  "key": "tags[]",
+                  "value": "images",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": [],
+                  "description": "JPG/PNG/WebP \u2265200\u00d7200, \u22645 MB"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const setVar = (k, v) => { pm.collectionVariables.set(k, v); try { pm.environment.set(k, v); } catch (e) {} };",
+                  "const b = pm.response.json();",
+                  "if (pm.response.code === 201 && b.data) { setVar('post_slug', b.data.slug); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update post (JSON, no image)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/posts/{{post_slug}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "posts",
+                "{{post_slug}}"
+              ]
+            },
+            "description": "Requires a token. **Author only** \u2014 editing someone else's post returns `403`.\n\nAll fields optional. `tags`: key omitted \u2192 unchanged \u00b7 `[]` \u2192 cleared \u00b7 list \u2192 replaced.\n\nThe **slug never changes**, so existing links keep working.\n\n**200** `{ message, data }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"An Edited Title From Postman\",\n  \"description\": \"An edited description, still comfortably over the minimum length.\",\n  \"tags\": [\"laravel\", \"editing\"]\n}"
+            }
+          }
+        },
+        {
+          "name": "Update post (multipart, replace image)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/posts/{{post_slug}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "posts",
+                "{{post_slug}}"
+              ]
+            },
+            "description": "\u26a0\ufe0f **POST with `_method=PUT`**, not a real PUT \u2014 PHP only populates `$_FILES` on POST.\n\nReplacing the image deletes the previous file and its thumbnail, and clears `image_thumbnail_url` until the job regenerates it.\n\n**Known limitation:** you cannot clear *all* tags in the same request as an image upload \u2014 multipart can't express an empty array. Use the JSON variant to clear tags.\n\n**200** `{ message, data }`.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "_method",
+                  "value": "PUT",
+                  "type": "text",
+                  "description": "Required \u2014 see description"
+                },
+                {
+                  "key": "title",
+                  "value": "Edited With A New Cover",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": [],
+                  "description": "JPG/PNG/WebP \u2265200\u00d7200, \u22645 MB"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Comments",
+      "item": [
+        {
+          "name": "List comments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/posts/{{post_slug}}/comments?page=1&per_page=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "posts",
+                "{{post_slug}}",
+                "comments"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": ""
+                },
+                {
+                  "key": "per_page",
+                  "value": "20",
+                  "description": "1-50, default 20"
+                }
+              ]
+            },
+            "description": "Public, newest first, **not cached** (comments turn over too fast).\n\nEach comment carries `can: { update, delete }` telling *you* what you may do, so a UI never renders a button that would 403. Send a token for meaningful values \u2014 without one both are `false`.\n\n**200** `{ data, links, meta }`.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const setVar = (k, v) => { pm.collectionVariables.set(k, v); try { pm.environment.set(k, v); } catch (e) {} };",
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.length) { setVar('comment_id', b.data[0].id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create comment  \u2192 captures {{comment_id}}",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/posts/{{post_slug}}/comments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "posts",
+                "{{post_slug}}",
+                "comments"
+              ]
+            },
+            "description": "Requires a token. `body` 2-2000 chars, trimmed.\n\nQueues an email to the post's author (skipped when commenting on your own post):\n```bash\nphp artisan queue:work --queue=mail\n```\n\n**201** `{ message, data }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"A comment posted from Postman.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const setVar = (k, v) => { pm.collectionVariables.set(k, v); try { pm.environment.set(k, v); } catch (e) {} };",
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "if (b.data && b.data.id) { setVar('comment_id', b.data.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update comment",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/comments/{{comment_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "comments",
+                "{{comment_id}}"
+              ]
+            },
+            "description": "Requires a token. **Comment author only** \u2014 not even the post's author may edit someone else's words (`403`).\n\nSets `edited: true`.\n\n**200** `{ message, data }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"An edited comment from Postman.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete comment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/comments/{{comment_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "comments",
+                "{{comment_id}}"
+              ]
+            },
+            "description": "Requires a token. Allowed for **the comment's author OR the post's author**, so a writer can moderate their own thread. Anyone else gets `403`.\n\n**200** `{ message }`."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Session",
+      "item": [
+        {
+          "name": "Logout  (run last \u2014 clears {{token}})",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "logout"
+              ]
+            },
+            "description": "Requires a token. Revokes **only the token used for this request** \u2014 other devices stay signed in.\n\n**200** `{ message }`; reusing the token afterwards returns `401`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const setVar = (k, v) => { pm.collectionVariables.set(k, v); try { pm.environment.set(k, v); } catch (e) {} };",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "setVar('token', '');"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Kept last so a top-to-bottom run stays authenticated throughout."
+    }
+  ]
+}

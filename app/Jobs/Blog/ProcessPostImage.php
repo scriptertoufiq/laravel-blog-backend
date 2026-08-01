@@ -4,7 +4,7 @@ namespace App\Jobs\Blog;
 
 use App\Models\Post;
 use App\Services\Blog\PostService;
-use GdImage;
+use App\Services\Media\ImageResizer;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -32,8 +32,14 @@ class ProcessPostImage implements ShouldQueue
     private const THUMBNAIL_DIRECTORY = 'posts/thumbnails';
 
     /**
-     * The number of times the job may be attempted.
+     * Discard the job when the model it carries has been deleted.
+     *
+     * Queued jobs restore their models by id, which throws before `handle()`
+     * ever runs — so a user or post deleted while a job was still queued would
+     * otherwise land in `failed_jobs` for no useful reason.
      */
+    public bool $deleteWhenMissingModels = true;
+
     public int $tries = 3;
 
     /**
@@ -62,9 +68,9 @@ class ProcessPostImage implements ShouldQueue
      * The generated thumbnail changes what the read endpoints should return, so
      * the post's cache entry is rewritten once the new path is stored.
      */
-    public function handle(PostService $posts): void
+    public function handle(PostService $posts, ImageResizer $resizer): void
     {
-        if (! function_exists('imagecreatefromstring')) {
+        if (! $resizer->isAvailable()) {
             Log::warning('Skipping post thumbnail generation because the GD extension is unavailable.', [
                 'post_id' => $this->post->getKey(),
             ]);
@@ -89,7 +95,7 @@ class ProcessPostImage implements ShouldQueue
             return;
         }
 
-        $thumbnail = $this->thumbnailFrom((string) $disk->get($post->image_path));
+        $thumbnail = $resizer->scaleToWidth((string) $disk->get($post->image_path), self::THUMBNAIL_WIDTH);
 
         if ($thumbnail === null) {
             Log::warning('Post image could not be decoded into a thumbnail.', [
@@ -121,70 +127,5 @@ class ProcessPostImage implements ShouldQueue
             'post_id' => $this->post->getKey(),
             'exception' => $exception?->getMessage(),
         ]);
-    }
-
-    /**
-     * Scale the given image down, returning the encoded thumbnail bytes.
-     */
-    private function thumbnailFrom(string $contents): ?string
-    {
-        $dimensions = @getimagesizefromstring($contents);
-
-        if ($dimensions === false) {
-            return null;
-        }
-
-        [$width, $height] = $dimensions;
-
-        $source = @imagecreatefromstring($contents);
-
-        if ($source === false) {
-            return null;
-        }
-
-        $thumbnail = null;
-
-        try {
-            $scale = min(1, self::THUMBNAIL_WIDTH / max($width, 1));
-            $targetWidth = max(1, (int) round($width * $scale));
-            $targetHeight = max(1, (int) round($height * $scale));
-
-            $thumbnail = imagecreatetruecolor($targetWidth, $targetHeight);
-
-            imagealphablending($thumbnail, false);
-            imagesavealpha($thumbnail, true);
-            imagecopyresampled(
-                $thumbnail, $source,
-                0, 0, 0, 0,
-                $targetWidth, $targetHeight,
-                $width, $height,
-            );
-
-            return $this->encode($thumbnail, $dimensions[2]);
-        } finally {
-            imagedestroy($source);
-
-            if ($thumbnail instanceof GdImage) {
-                imagedestroy($thumbnail);
-            }
-        }
-    }
-
-    /**
-     * Encode the thumbnail back into the format the original used.
-     */
-    private function encode(GdImage $thumbnail, int $imageType): ?string
-    {
-        ob_start();
-
-        $encoded = match ($imageType) {
-            IMAGETYPE_PNG => imagepng($thumbnail, null, 6),
-            IMAGETYPE_WEBP => imagewebp($thumbnail, null, 82),
-            default => imagejpeg($thumbnail, null, 82),
-        };
-
-        $contents = ob_get_clean();
-
-        return $encoded && is_string($contents) && $contents !== '' ? $contents : null;
     }
 }

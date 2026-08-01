@@ -3,8 +3,10 @@
 namespace App\Http\Resources\Api\V1;
 
 use App\Models\User;
+use App\Services\Auth\ProfileService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * The public face of a post's author.
@@ -26,6 +28,15 @@ class AuthorResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'avatar_url' => $this->avatarUrl($this->avatar_thumbnail_path ?? $this->avatar_path),
         ];
+    }
+
+    /**
+     * Resolve a stored avatar path into a publicly reachable URL.
+     */
+    private function avatarUrl(?string $path): ?string
+    {
+        return $path === null ? null : Storage::disk(ProfileService::AVATAR_DISK)->url($path);
     }
 }

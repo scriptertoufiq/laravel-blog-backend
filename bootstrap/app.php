@@ -17,6 +17,14 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->throttleApi();
 
+        // Guests hitting the API must get a 401, never a redirect. The default
+        // callback returns `route('login')`, which this application does not
+        // define — so an API client that omits `Accept: application/json` would
+        // otherwise get a 500 instead of an auth error.
+        $middleware->redirectGuestsTo(
+            fn (Request $request) => $request->is('api/*') ? null : route('home'),
+        );
+
         $middleware->web(append: [
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,

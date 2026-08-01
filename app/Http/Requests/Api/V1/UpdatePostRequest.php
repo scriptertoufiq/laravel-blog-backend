@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Services\Media\UploadLimits;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
@@ -31,7 +32,7 @@ class UpdatePostRequest extends FormRequest
                 'image',
                 'mimes:jpg,jpeg,png,webp',
                 'mimetypes:image/jpeg,image/png,image/webp',
-                'max:'.self::MAX_IMAGE_KILOBYTES,
+                'max:'.$this->maxUploadKilobytes(),
                 'dimensions:min_width=200,min_height=200',
             ],
             'tags' => ['sometimes', 'array', 'max:10'],
@@ -108,5 +109,16 @@ class UpdatePostRequest extends FormRequest
         return collect($tags)
             ->map(fn (mixed $tag): mixed => is_string($tag) ? Str::squish($tag) : $tag)
             ->all();
+    }
+
+    /**
+     * The effective size cap, clamped to what PHP will actually accept.
+     *
+     * Without the clamp an oversized upload is killed by PHP with a bare 413
+     * instead of reaching this rule and producing a readable message.
+     */
+    private function maxUploadKilobytes(): int
+    {
+        return app(UploadLimits::class)->maxKilobytes(self::MAX_IMAGE_KILOBYTES);
     }
 }

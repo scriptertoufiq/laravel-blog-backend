@@ -130,7 +130,7 @@ it('exposes the author name but never their email address', function (): void {
         ->assertJsonPath('data.0.author.id', $author->id);
 
     expect(json_encode($response->json()))->not->toContain('toufiq@example.com')
-        ->and(array_keys($response->json('data.0.author')))->toBe(['id', 'name']);
+        ->and(array_keys($response->json('data.0.author')))->toBe(['id', 'name', 'avatar_url']);
 });
 
 it('returns an empty page when there are no posts', function (): void {

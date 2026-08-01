@@ -23,6 +23,8 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string|null $remember_token
  * @property Carbon|null $last_login_at
  * @property string|null $last_login_ip
+ * @property string|null $avatar_path
+ * @property string|null $avatar_thumbnail_path
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
