@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class PostService
@@ -122,6 +123,64 @@ class PostService
     }
 
     /**
+     * Apply changes to a post, then write the new version straight into cache.
+     *
+     * @param  array<string, string>  $attributes
+     * @param  array<int, string>|null  $tagNames  null leaves the existing tags alone
+     */
+    public function update(Post $post, array $attributes, ?UploadedFile $image = null, ?array $tagNames = null): Post
+    {
+        $replacedImagePath = $image === null ? null : $post->image_path;
+        $replacedThumbnailPath = $image === null ? null : $post->image_thumbnail_path;
+        $newImagePath = $image?->store(self::IMAGE_DIRECTORY, self::IMAGE_DISK) ?: null;
+
+        DB::transaction(function () use ($post, $attributes, $newImagePath, $tagNames): void {
+            $post->fill($attributes);
+
+            if ($newImagePath !== null) {
+                $post->image_path = $newImagePath;
+                $post->image_thumbnail_path = null;
+            }
+
+            $post->save();
+
+            if ($tagNames !== null) {
+                $post->tags()->sync($this->resolveTagIds($tagNames));
+            }
+        });
+
+        $this->deleteStoredImages($replacedImagePath, $replacedThumbnailPath);
+
+        if ($newImagePath !== null) {
+            ProcessPostImage::dispatch($post)->afterCommit();
+        }
+
+        return $this->refresh($post);
+    }
+
+    /**
+     * Rebuild this post's cache entry from its current state.
+     *
+     * The listing is invalidated rather than rebuilt: the post could sit on any
+     * page, and warming all of them would cost far more than letting the next
+     * reader rebuild the one page they actually ask for.
+     */
+    public function refresh(Post $post): Post
+    {
+        $post = $post->fresh(['tags', 'author']) ?? $post;
+
+        Cache::put(
+            $this->showKey($post->slug),
+            PostResource::make($post)->response(request())->getData(true),
+            self::CACHE_TTL_SECONDS,
+        );
+
+        $this->bumpListVersion();
+
+        return $post;
+    }
+
+    /**
      * Drop every cache entry that could still be serving a stale view of a post.
      */
     public function forget(Post $post): void
@@ -129,6 +188,18 @@ class PostService
         Cache::forget($this->showKey($post->slug));
 
         $this->bumpListVersion();
+    }
+
+    /**
+     * Remove image files that a replacement has made redundant.
+     */
+    private function deleteStoredImages(?string ...$paths): void
+    {
+        $stale = array_values(array_filter($paths));
+
+        if ($stale !== []) {
+            Storage::disk(self::IMAGE_DISK)->delete($stale);
+        }
     }
 
     /**

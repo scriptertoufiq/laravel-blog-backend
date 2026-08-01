@@ -4,49 +4,9 @@ use App\Models\Post;
 use App\Models\Tag;
 use App\Models\User;
 use App\Services\Blog\PostService;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
-
-/**
- * Count the database queries run while the callback executes.
- */
-function queriesDuring(Closure $callback): int
-{
-    DB::flushQueryLog();
-    DB::enableQueryLog();
-
-    try {
-        $callback();
-
-        return count(DB::getQueryLog());
-    } finally {
-        DB::disableQueryLog();
-    }
-}
-
-/**
- * Count only the queries that touched the posts table while the callback ran.
- *
- * Needed when the cache store is itself backed by the database, where a plain
- * query count would also pick up the cache store's own reads and writes.
- */
-function postTableQueriesDuring(Closure $callback): int
-{
-    DB::flushQueryLog();
-    DB::enableQueryLog();
-
-    try {
-        $callback();
-
-        return collect(DB::getQueryLog())
-            ->filter(fn (array $query): bool => str_contains($query['query'], 'posts'))
-            ->count();
-    } finally {
-        DB::disableQueryLog();
-    }
-}
 
 it('lists posts newest first', function (): void {
     $older = Post::factory()->create(['title' => 'Older', 'created_at' => now()->subDay()]);

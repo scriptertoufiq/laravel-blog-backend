@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /*
@@ -60,4 +61,43 @@ function something()
 function startNewRequestLifecycle(): void
 {
     app('auth')->forgetGuards();
+}
+
+/**
+ * Count the database queries run while the callback executes.
+ */
+function queriesDuring(Closure $callback): int
+{
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    try {
+        $callback();
+
+        return count(DB::getQueryLog());
+    } finally {
+        DB::disableQueryLog();
+    }
+}
+
+/**
+ * Count only the queries that touched the posts table while the callback ran.
+ *
+ * Needed when the cache store is itself backed by the database, where a plain
+ * query count would also pick up the cache store's own reads and writes.
+ */
+function postTableQueriesDuring(Closure $callback): int
+{
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    try {
+        $callback();
+
+        return collect(DB::getQueryLog())
+            ->filter(fn (array $query): bool => str_contains($query['query'], 'posts'))
+            ->count();
+    } finally {
+        DB::disableQueryLog();
+    }
 }

@@ -36,7 +36,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::middleware('verified')->group(function (): void {
             Route::get('user', AuthenticatedUserController::class)->name('user');
 
-            Route::apiResource('posts', PostController::class)->only('store');
+            Route::apiResource('posts', PostController::class)
+                ->only(['store', 'update'])
+                ->parameters(['posts' => 'post:slug']);
         });
     });
 });

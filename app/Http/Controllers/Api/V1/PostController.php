@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\IndexPostRequest;
 use App\Http\Requests\Api\V1\StorePostRequest;
+use App\Http\Requests\Api\V1\UpdatePostRequest;
 use App\Http\Resources\Api\V1\PostResource;
+use App\Models\Post;
 use App\Models\User;
 use App\Services\Blog\PostService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\Response;
 
 class PostController extends Controller
@@ -52,5 +55,24 @@ class PostController extends Controller
             ->additional(['message' => __('Post created successfully.')])
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
+    }
+
+    /**
+     * Update a post the caller wrote, refreshing its cached copy.
+     */
+    public function update(UpdatePostRequest $request, Post $post): JsonResponse
+    {
+        Gate::authorize('update', $post);
+
+        $post = $this->posts->update(
+            $post,
+            $request->postData(),
+            $request->coverImage(),
+            $request->tags(),
+        );
+
+        return PostResource::make($post)
+            ->additional(['message' => __('Post updated successfully.')])
+            ->response();
     }
 }

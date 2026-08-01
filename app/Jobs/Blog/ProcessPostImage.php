@@ -60,7 +60,7 @@ class ProcessPostImage implements ShouldQueue
      * Execute the job.
      *
      * The generated thumbnail changes what the read endpoints should return, so
-     * the post's cache entries are dropped once the new path is written.
+     * the post's cache entry is rewritten once the new path is stored.
      */
     public function handle(PostService $posts): void
     {
@@ -109,7 +109,7 @@ class ProcessPostImage implements ShouldQueue
             ->toBase()
             ->update(['image_thumbnail_path' => $thumbnailPath]);
 
-        $posts->forget($post);
+        $posts->refresh($post);
     }
 
     /**
