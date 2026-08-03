@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\ProfileController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\CommentController;
+use App\Http\Controllers\Api\V1\GeneratePostController;
 use App\Http\Controllers\Api\V1\PostController;
 use Illuminate\Support\Facades\Route;
 
@@ -45,6 +46,12 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::put('user/password', [ProfileController::class, 'updatePassword'])
             ->middleware('throttle:password-update')
             ->name('password.update');
+
+        // Declared ahead of the resource routes so `generate` is matched as a
+        // literal segment rather than swallowed as a post slug.
+        Route::post('posts/generate', GeneratePostController::class)
+            ->middleware('throttle:post-generation')
+            ->name('posts.generate');
 
         Route::apiResource('posts', PostController::class)
             ->only(['store', 'update'])

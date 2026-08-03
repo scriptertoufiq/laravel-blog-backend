@@ -66,6 +66,12 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('password-update', fn (Request $request) => Limit::perMinute(5)
             ->by('user:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
 
+        // Every call spends real money at a third party, so this is metered per
+        // author rather than per IP — a shared office must not exhaust one
+        // person's allowance, and one account must not hide behind many IPs.
+        RateLimiter::for('post-generation', fn (Request $request) => Limit::perMinute(5)
+            ->by('user:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
+
         RateLimiter::for('verification-link', fn (Request $request) => Limit::perMinute(10)->by('ip:'.$request->ip()));
 
         RateLimiter::for('verification-request', fn (Request $request) => [

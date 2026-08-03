@@ -14,6 +14,25 @@ return [
     |
     */
 
+    'anthropic' => [
+        'key' => env('ANTHROPIC_API_KEY'),
+        'model' => env('ANTHROPIC_MODEL', 'claude-opus-5'),
+        'base_url' => env('ANTHROPIC_BASE_URL', 'https://api.anthropic.com'),
+
+        /*
+         * How hard the model works before answering. Drafting a post from a
+         * title is not a reasoning-heavy job, so the cheapest, fastest setting
+         * is the default; raise it if drafts come back thin.
+         */
+        'effort' => env('ANTHROPIC_EFFORT', 'low'),
+
+        /*
+         * Seconds to wait for a draft. Generous by HTTP standards because the
+         * model writes the whole post before it answers.
+         */
+        'timeout' => (int) env('ANTHROPIC_TIMEOUT', 60),
+    ],
+
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],
