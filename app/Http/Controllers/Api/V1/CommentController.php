@@ -26,7 +26,10 @@ class CommentController extends Controller
     public function index(IndexCommentRequest $request, Post $post): ResourceCollection
     {
         return CommentResource::collection(
-            $this->comments->paginate($post, $request->page(), $request->perPage()),
+            // The guard is named because this route is public: without it a
+            // reader holding a token would be read as a guest and shown none
+            // of their own reactions.
+            $this->comments->paginate($post, $request->page(), $request->perPage(), $request->user('sanctum')),
         );
     }
 
@@ -53,7 +56,10 @@ class CommentController extends Controller
     {
         Gate::authorize('update', $comment);
 
-        $comment = $this->comments->update($comment, $request->body());
+        /** @var User $viewer */
+        $viewer = $request->user();
+
+        $comment = $this->comments->update($comment, $request->body(), $viewer);
 
         return CommentResource::make($comment)
             ->additional(['message' => __('Comment updated.')])

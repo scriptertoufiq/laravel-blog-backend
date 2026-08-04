@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasReactions;
 use Database\Factories\CommentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -19,10 +20,10 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  */
 #[Fillable(['body'])]
-class Comment extends Model
+class Comment extends Model implements Reactable
 {
     /** @use HasFactory<CommentFactory> */
-    use HasFactory;
+    use HasFactory, HasReactions;
 
     /**
      * Get the attributes that should be cast.

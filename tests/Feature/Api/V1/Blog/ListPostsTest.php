@@ -25,11 +25,11 @@ it('is reachable without authentication', function (): void {
     $this->getJson(route('api.v1.posts.index'))->assertOk()->assertJsonCount(2, 'data');
 });
 
-it('serves the second request entirely from cache', function (): void {
+it('serves the second request\'s posts from cache', function (): void {
     Post::factory()->count(3)->create();
 
-    $first = queriesDuring(fn () => $this->getJson(route('api.v1.posts.index'))->assertOk());
-    $second = queriesDuring(fn () => $this->getJson(route('api.v1.posts.index'))->assertOk());
+    $first = postTableQueriesDuring(fn () => $this->getJson(route('api.v1.posts.index'))->assertOk());
+    $second = postTableQueriesDuring(fn () => $this->getJson(route('api.v1.posts.index'))->assertOk());
 
     expect($first)->toBeGreaterThan(0)
         ->and($second)->toBe(0);
@@ -52,7 +52,7 @@ it('caches each page separately', function (): void {
 
     expect($pageOne)->not->toBe($pageTwo);
 
-    $queries = queriesDuring(function (): void {
+    $queries = postTableQueriesDuring(function (): void {
         $this->getJson(route('api.v1.posts.index'))->assertOk();
         $this->getJson(route('api.v1.posts.index', ['page' => 2]))->assertOk();
     });

@@ -894,6 +894,131 @@
       ]
     },
     {
+      "name": "Reactions",
+      "item": [
+        {
+          "name": "Set reaction on post",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/posts/{{post_slug}}/reactions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "posts",
+                "{{post_slug}}",
+                "reactions"
+              ]
+            },
+            "description": "Requires a token. `type` is one of `like`, `love`, `laugh`, `insightful`, `sad`.\n\nIdempotent \u2014 a reader holds at most one reaction per post, so sending a different type replaces the earlier one rather than adding to it. 60/min per account.\n\n**200** `{ message, data }`, where `data` is the whole tally: `{ total, counts: { like, love, laugh, insightful, sad }, viewer_reaction }`. Every type is reported, zeros included.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"love\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Remove reaction from post",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/posts/{{post_slug}}/reactions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "posts",
+                "{{post_slug}}",
+                "reactions"
+              ]
+            },
+            "description": "Requires a token. Clearing a reaction that was never left is still a **200** \u2014 the caller gets the outcome they asked for either way.\n\n**200** `{ message, data }`, where `data` is the whole tally: `{ total, counts: { like, love, laugh, insightful, sad }, viewer_reaction }`. Every type is reported, zeros included."
+          }
+        },
+        {
+          "name": "Set reaction on comment",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/comments/{{comment_id}}/reactions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "comments",
+                "{{comment_id}}",
+                "reactions"
+              ]
+            },
+            "description": "Requires a token. Same rules as reacting to a post \u2014 run **Create comment** first so `{{comment_id}}` is set.\n\n**200** `{ message, data }`, where `data` is the whole tally: `{ total, counts: { like, love, laugh, insightful, sad }, viewer_reaction }`. Every type is reported, zeros included.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"insightful\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Remove reaction from comment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/comments/{{comment_id}}/reactions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "comments",
+                "{{comment_id}}",
+                "reactions"
+              ]
+            },
+            "description": "Requires a token.\n\n**200** `{ message, data }`, where `data` is the whole tally: `{ total, counts: { like, love, laugh, insightful, sad }, viewer_reaction }`. Every type is reported, zeros included."
+          }
+        }
+      ]
+    },
+    {
       "name": "Session",
       "item": [
         {

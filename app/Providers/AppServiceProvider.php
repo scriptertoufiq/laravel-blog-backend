@@ -72,6 +72,11 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('post-generation', fn (Request $request) => Limit::perMinute(5)
             ->by('user:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
 
+        // A reaction is one click, and readers do click around — metered per
+        // account so a shared network does not throttle everyone at once.
+        RateLimiter::for('reactions', fn (Request $request) => Limit::perMinute(60)
+            ->by('user:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
+
         RateLimiter::for('verification-link', fn (Request $request) => Limit::perMinute(10)->by('ip:'.$request->ip()));
 
         RateLimiter::for('verification-request', fn (Request $request) => [

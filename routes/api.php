@@ -7,8 +7,10 @@ use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\ProfileController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\CommentController;
+use App\Http\Controllers\Api\V1\CommentReactionController;
 use App\Http\Controllers\Api\V1\GeneratePostController;
 use App\Http\Controllers\Api\V1\PostController;
+use App\Http\Controllers\Api\V1\PostReactionController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
@@ -61,5 +63,19 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             ->name('posts.comments.store');
 
         Route::apiResource('comments', CommentController::class)->only(['update', 'destroy']);
+
+        Route::middleware('throttle:reactions')->group(function (): void {
+            Route::put('posts/{post:slug}/reactions', [PostReactionController::class, 'update'])
+                ->name('posts.reactions.update');
+
+            Route::delete('posts/{post:slug}/reactions', [PostReactionController::class, 'destroy'])
+                ->name('posts.reactions.destroy');
+
+            Route::put('comments/{comment}/reactions', [CommentReactionController::class, 'update'])
+                ->name('comments.reactions.update');
+
+            Route::delete('comments/{comment}/reactions', [CommentReactionController::class, 'destroy'])
+                ->name('comments.reactions.destroy');
+        });
     });
 });

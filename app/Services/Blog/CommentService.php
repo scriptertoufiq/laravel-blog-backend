@@ -19,12 +19,17 @@ class CommentService
      * over far faster than posts do, and a reader who has just left one expects
      * to see it immediately.
      *
+     * The reaction figures ride along on the same query rather than being
+     * fetched per row, so a full page still costs a fixed number of queries.
+     *
      * @return LengthAwarePaginator<int, Comment>
      */
-    public function paginate(Post $post, int $page, int $perPage): LengthAwarePaginator
+    public function paginate(Post $post, int $page, int $perPage, ?User $viewer = null): LengthAwarePaginator
     {
         return $post->comments()
             ->with('author')
+            ->withReactionCounts()
+            ->withViewerReaction($viewer)
             ->latest('created_at')
             ->latest('id')
             ->paginate(perPage: $perPage, page: $page);
@@ -46,19 +51,19 @@ class CommentService
 
         NotifyAuthorOfComment::dispatch($comment)->afterCommit();
 
-        return $comment->load('author');
+        return $comment->load('author')->loadReactionState($author);
     }
 
     /**
      * Replace the text of an existing comment.
      */
-    public function update(Comment $comment, string $body): Comment
+    public function update(Comment $comment, string $body, ?User $viewer = null): Comment
     {
         $comment->fill(['body' => $body]);
         $comment->edited_at = now();
         $comment->save();
 
-        return $comment->load('author');
+        return $comment->load('author')->loadReactionState($viewer);
     }
 
     /**

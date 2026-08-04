@@ -4,6 +4,7 @@ namespace App\Http\Resources\Api\V1;
 
 use App\Models\Post;
 use App\Services\Blog\PostService;
+use App\Services\Blog\ReactionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Storage;
@@ -30,6 +31,12 @@ class PostResource extends JsonResource
             'tags' => TagResource::collection($this->whenLoaded('tags')),
             'author' => AuthorResource::make($this->whenLoaded('author')),
             'comments_count' => (int) ($this->comments_count ?? $this->comments()->count()),
+            // Renders as all zeros unless a caller has loaded the counts, which
+            // is exactly what the listing and show payloads want: they are
+            // cached for everyone, so the post service fills the real, reader
+            // specific figures in after the cache is read.
+            'reactions' => app(ReactionService::class)
+                ->summarizeLoaded($this->resource, $this->viewerReactionType()),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

@@ -16,6 +16,8 @@ use Illuminate\Support\Str;
 
 class PostService
 {
+    public function __construct(private readonly ReactionService $reactions) {}
+
     /**
      * The disk that post images are written to.
      */
@@ -50,9 +52,9 @@ class PostService
      *
      * @return array<string, mixed>
      */
-    public function paginate(int $page, int $perPage): array
+    public function paginate(int $page, int $perPage, ?User $viewer = null): array
     {
-        return Cache::remember(
+        $payload = Cache::remember(
             $this->listKey($page, $perPage),
             self::CACHE_TTL_SECONDS,
             function () use ($page, $perPage): array {
@@ -67,6 +69,8 @@ class PostService
                 return PostResource::collection($posts)->response(request())->getData(true);
             },
         );
+
+        return $this->withReactions($payload, $viewer);
     }
 
     /**
@@ -76,9 +80,9 @@ class PostService
      *
      * @throws ModelNotFoundException<Post>
      */
-    public function findBySlug(string $slug): array
+    public function findBySlug(string $slug, ?User $viewer = null): array
     {
-        return Cache::remember(
+        $payload = Cache::remember(
             $this->showKey($slug),
             self::CACHE_TTL_SECONDS,
             function () use ($slug): array {
@@ -91,6 +95,8 @@ class PostService
                 return PostResource::make($post)->response(request())->getData(true);
             },
         );
+
+        return $this->withReactions($payload, $viewer);
     }
 
     /**
@@ -121,7 +127,7 @@ class PostService
             ProcessPostImage::dispatch($post)->afterCommit();
         }
 
-        return $post->load('tags');
+        return $post->load('tags')->loadReactionState($author);
     }
 
     /**
@@ -157,7 +163,7 @@ class PostService
             ProcessPostImage::dispatch($post)->afterCommit();
         }
 
-        return $this->refresh($post);
+        return $this->refresh($post)->loadReactionState($post->author);
     }
 
     /**
@@ -207,6 +213,48 @@ class PostService
     public function forgetAllListings(): void
     {
         $this->bumpListVersion();
+    }
+
+    /**
+     * Fill a cached payload in with reaction figures.
+     *
+     * Reactions are deliberately left out of the cached copy: they turn over
+     * far faster than a post does, and half of what they say — which button
+     * this reader pressed — is true for one person only, so a shared cache
+     * entry could never hold it. Two queries cover the whole page.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function withReactions(array $payload, ?User $viewer): array
+    {
+        /** @var array<int|string, mixed> $data */
+        $data = $payload['data'];
+        $isCollection = array_is_list($data);
+
+        /** @var array<int, array<string, mixed>> $rows */
+        $rows = $isCollection ? $data : [$data];
+
+        $ids = array_map(static fn (array $row): int => (int) $row['id'], $rows);
+        $morphClass = (new Post)->getMorphClass();
+
+        $counts = $this->reactions->countsFor($morphClass, $ids);
+        $viewerReactions = $this->reactions->viewerReactionsFor($morphClass, $ids, $viewer);
+
+        $rows = array_map(
+            fn (array $row): array => [
+                ...$row,
+                'reactions' => $this->reactions->summary(
+                    $counts[$row['id']] ?? [],
+                    $viewerReactions[$row['id']] ?? null,
+                ),
+            ],
+            $rows,
+        );
+
+        $payload['data'] = $isCollection ? $rows : $rows[0];
+
+        return $payload;
     }
 
     /**

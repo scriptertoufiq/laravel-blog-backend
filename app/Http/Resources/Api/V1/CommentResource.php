@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Api\V1;
 
 use App\Models\Comment;
+use App\Services\Blog\ReactionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -29,6 +30,10 @@ class CommentResource extends JsonResource
             'body' => $this->body,
             'author' => AuthorResource::make($this->whenLoaded('author')),
             'edited' => $this->wasEdited(),
+            // Counts and the viewer's own pick are eager loaded by the comment
+            // service, so this costs no query however long the page is.
+            'reactions' => app(ReactionService::class)
+                ->summarizeLoaded($this->resource, $this->viewerReactionType()),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
             // Told to the client so it can show the right controls rather than

@@ -11,3 +11,8 @@ parameters:
         - routes/
 
     level: 7
+
+    # Every model in this application declares its casts through the `casts()`
+    # method rather than a `$casts` property, which larastan only reads when it
+    # is asked to parse the method body.
+    parseModelCastsMethod: true

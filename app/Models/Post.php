@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasReactions;
 use Database\Factories\PostFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -23,10 +24,27 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  */
 #[Fillable(['title', 'slug', 'description', 'image_path'])]
-class Post extends Model
+class Post extends Model implements Reactable
 {
     /** @use HasFactory<PostFactory> */
-    use HasFactory;
+    use HasFactory, HasReactions;
+
+    /**
+     * Clear the reactions on this post's comments before it is deleted.
+     *
+     * The comments themselves go with the post through a database cascade,
+     * which fires no Eloquent events — so nothing else is left to take their
+     * reactions with them.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (self $post): void {
+            Reaction::query()
+                ->where('reactable_type', (new Comment)->getMorphClass())
+                ->whereIn('reactable_id', $post->comments()->select('id'))
+                ->delete();
+        });
+    }
 
     /**
      * The author of the post.

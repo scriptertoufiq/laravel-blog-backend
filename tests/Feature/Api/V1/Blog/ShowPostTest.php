@@ -24,11 +24,11 @@ it('is reachable without authentication', function (): void {
     $this->getJson(route('api.v1.posts.show', 'public-post'))->assertOk();
 });
 
-it('serves the second request entirely from cache', function (): void {
+it('serves the second request\'s post from cache', function (): void {
     Post::factory()->create(['slug' => 'cached-post']);
 
-    $first = queriesDuring(fn () => $this->getJson(route('api.v1.posts.show', 'cached-post'))->assertOk());
-    $second = queriesDuring(fn () => $this->getJson(route('api.v1.posts.show', 'cached-post'))->assertOk());
+    $first = postTableQueriesDuring(fn () => $this->getJson(route('api.v1.posts.show', 'cached-post'))->assertOk());
+    $second = postTableQueriesDuring(fn () => $this->getJson(route('api.v1.posts.show', 'cached-post'))->assertOk());
 
     expect($first)->toBeGreaterThan(0)
         ->and($second)->toBe(0);
